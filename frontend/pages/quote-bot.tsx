@@ -33,8 +33,8 @@ export default function QuoteBot() {
     const userMsg = { sender: "user", text: input };
     setMessages((msgs) => [...msgs, userMsg]);
     const currentStep = steps[step];
-    let value = input.trim();
-    let nextForm = { ...form };
+  let value = input.trim();
+  const nextForm = { ...form };
     if (currentStep.key === "is_prom_or_dance") {
       value = /yes|y/i.test(value) ? true : false;
     }
