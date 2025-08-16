@@ -7,6 +7,7 @@ output_path = '../data/vehicles_cleaned.csv'
 with open(input_path, newline='', encoding='utf-8') as infile:
     reader = csv.reader(infile)
     rows = list(reader)
+    
 
 header = rows[0]
 num_cols = len(header)
@@ -24,4 +25,4 @@ with open(output_path, 'w', newline='', encoding='utf-8') as outfile:
     writer = csv.writer(outfile)
     writer.writerows(cleaned)
 
-print(f"Cleaned CSV written to {output_path}. {len(cleaned)-1} rows retained.")
+print(f"Cleaned CSV written to {output_path}. {len(cleaned)-1} rows retained.") 
