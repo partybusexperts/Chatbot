@@ -1,18 +1,37 @@
+type VehicleOption = {
+  name?: string;
+  capacity?: number;
+  zip_codes?: string;
+  total_all_in?: number;
+  hours_billed?: number;
+};
+
 import { useState } from "react";
+
+type FormState = {
+  city: string;
+  passengers: number | "";
+  hours: number | "";
+  event_date: string;
+  is_prom_or_dance: boolean;
+  size_direction: string;
+  zip: string;
+};
+
 
 export default function QuoteBot() {
   const [messages, setMessages] = useState([
     { sender: "bot", text: "Hi! I can help you get a party bus quote. What city are you interested in?" }
   ]);
   const [input, setInput] = useState("");
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<FormState>({
     city: "",
     passengers: "",
     hours: "",
     event_date: "",
     is_prom_or_dance: false,
-  size_direction: "",
-  zip: ""
+    size_direction: "",
+    zip: ""
   });
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -33,13 +52,13 @@ export default function QuoteBot() {
     const userMsg = { sender: "user", text: input };
     setMessages((msgs) => [...msgs, userMsg]);
     const currentStep = steps[step];
-  let value = input.trim();
-  const nextForm = { ...form };
+    let value: string | number | boolean = input.trim();
     if (currentStep.key === "is_prom_or_dance") {
-      value = /yes|y/i.test(value) ? true : false;
+      value = /^(yes|y|true|1)$/i.test(String(value));
+    } else if (currentStep.key === "passengers" || currentStep.key === "hours") {
+      value = value === "" ? "" : Number(value);
     }
-    nextForm[currentStep.key] = value;
-    setForm(nextForm);
+    setForm((prev) => ({ ...prev, [currentStep.key]: value }));
     setInput("");
     if (step < steps.length - 1) {
       setStep(step + 1);
@@ -54,13 +73,13 @@ export default function QuoteBot() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          city: nextForm.city,
-          zip: nextForm.zip || undefined,
-          passengers: Number(nextForm.passengers),
-          hours: Number(nextForm.hours),
-          event_date: nextForm.event_date || undefined,
-          is_prom_or_dance: nextForm.is_prom_or_dance,
-          size_direction: nextForm.size_direction || undefined
+          city: form.city,
+          zip: form.zip || undefined,
+          passengers: form.passengers === "" ? undefined : Number(form.passengers),
+          hours: form.hours === "" ? undefined : Number(form.hours),
+          event_date: form.event_date || undefined,
+          is_prom_or_dance: form.is_prom_or_dance,
+          size_direction: form.size_direction || undefined
         })
       })
         .then((res) => res.json())
@@ -73,7 +92,7 @@ export default function QuoteBot() {
                 sender: "bot",
                 text: `Here are your options:\n` +
                   data.options.map(
-                    (o, i) =>
+                    (o: VehicleOption, i: number) =>
                       `${i + 1}. ${o.name || "Unknown"} (${o.capacity ?? "?"} passengers, zips: ${o.zip_codes ? o.zip_codes.slice(0, 20) + (o.zip_codes.length > 20 ? '...' : '') : '?'}) : $${o.total_all_in ?? "?"} for ${o.hours_billed ?? "?"} hours`)
                     .join("\n")
               }
