@@ -27,7 +27,7 @@ export default function QuoteBot() {
     { key: "size_direction", prompt: "Do you want a larger or smaller vehicle, or no preference? (optional)" }
   ];
 
-  function handleSend(e) {
+  function handleSend(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!input.trim()) return;
     const userMsg = { sender: "user", text: input };
