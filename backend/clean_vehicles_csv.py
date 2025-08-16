@@ -8,6 +8,7 @@ with open(input_path, newline='', encoding='utf-8') as infile:
     reader = csv.reader(infile)
     rows = list(reader)
     
+    
 header = rows[0]
 num_cols = len(header)
 
