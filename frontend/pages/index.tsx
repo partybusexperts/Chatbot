@@ -169,18 +169,6 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="mb-3">
-            <label className="block text-sm">Split cost by # people (optional)</label>
-            <input
-              className="w-40 border p-2 rounded"
-              type="number"
-              placeholder={`${passengers}`}
-              value={splitCount as number | ""}
-              onChange={(e) =>
-                setSplitCount(e.target.value === "" ? "" : Number(e.target.value))
-              }
-            />
-          </div>
 
           {/* Always-visible button group */}
           <div className="flex flex-wrap gap-2 pt-1 mb-4">
