@@ -56,8 +56,12 @@ export default function Home() {
       setOptions(data.options || []);
       setNote(data.note || "");
       setPage(0); // always reset page on new search
-    } catch (e: any) {
-      setErr(e?.message || "Could not reach backend. Is it running on :8000?");
+    } catch (e) {
+      if (e instanceof Error) {
+        setErr(e.message);
+      } else {
+        setErr("Could not reach backend. Is it running on :8000?");
+      }
     } finally {
       setLoading(false);
     }
