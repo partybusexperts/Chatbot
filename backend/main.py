@@ -46,6 +46,7 @@ def is_prom_window(date_str: str | None) -> bool:
 @app.post("/quote")
 def quote(req: QuoteRequest):
     try:
+        print(f"[DEBUG] Incoming request: city='{req.city}', zip='{req.zip}', passengers={req.passengers}, hours={req.hours}, event_date={req.event_date}, is_prom_or_dance={req.is_prom_or_dance}")
         city = req.city.strip().lower()
         pax = int(req.passengers)
         hours_requested = int(req.hours)
@@ -55,25 +56,34 @@ def quote(req: QuoteRequest):
         df = load_vehicles()
         # Use 'city' or 'location' column depending on your CSV
         city_col = "city" if "city" in df.columns else "location"
-        # Filter by city (substring match)
-        city_mask = df[city_col].str.lower().str.replace(' ', '').str.contains(city.replace(' ', ''))
+        # Filter by city (robust: match if city is a word in a comma-separated list)
+        def city_match(cell: str, city: str) -> bool:
+            cell = str(cell).lower()
+            city = city.lower().strip()
+            return any(city == c.strip() for c in cell.split(',')) or city in cell
+        city_mask = df[city_col].apply(lambda cell: city_match(cell, city))
+        print(f"[DEBUG] City mask matches: {city_mask.sum()} out of {len(df)}")
         # Filter by zip if provided
         city_for_zip = None
         if req.zip:
             print(f"[DEBUG] Incoming zip: '{req.zip}' (type: {type(req.zip)})")
             df["zip_codes"] = df["zip_codes"].astype(str)
-            print(f"[DEBUG] First 5 zip_codes values:")
-            print(df["zip_codes"].head(5).to_string())
-            # Show split result for first row containing 85249
-            for idx, row in df.iterrows():
-                if "85249" in row["zip_codes"]:
-                    split_zips = [z for z in row["zip_codes"].split(",")]
-                    print(f"[DEBUG] Row {idx} zip_codes: {row['zip_codes']}")
-                    print(f"[DEBUG] Row {idx} split_zips: {split_zips}")
-                    break
-            # Only match vehicles that serve the requested zip code
-            zip_mask = df["zip_codes"].apply(lambda cell: any(z.strip() == str(req.zip).strip() for z in str(cell).split(",")))
-            print(f"[DEBUG] Rows matching zip: {zip_mask.sum()} out of {len(df)}")
+            def normalize_zip(z):
+                z = str(z).strip()
+                if len(z) < 5:
+                    z = z.zfill(5)
+                return z
+            req_zip_norm = normalize_zip(req.zip)
+            print(f"[DEBUG] Normalized incoming zip: '{req_zip_norm}'")
+            zip_mask = df["zip_codes"].apply(
+                lambda cell: any(normalize_zip(z) == req_zip_norm for z in str(cell).split(","))
+            )
+            print(f"[DEBUG] Zip mask matches: {zip_mask.sum()} out of {len(df)}")
+            # Print first 5 rows of zip-matching DataFrame for inspection
+            if zip_mask.any():
+                print(f"[DEBUG] First 5 rows matching zip:\n{df.loc[zip_mask].head(5).to_string(index=False)}")
+            else:
+                print("[DEBUG] No rows matched for zip.")
             mask = zip_mask
             # Get city for this zip (first match)
             if zip_mask.any():
@@ -83,9 +93,15 @@ def quote(req: QuoteRequest):
         df = df[mask].copy()
         df["capacity"] = pd.to_numeric(df["capacity"], errors="coerce").fillna(0).astype(int)
 
-        # For paging, just sort all matching vehicles by capacity
+        # Show all vehicles that match city/zip, sorted by capacity and price
         if df.empty:
-            return {"options": [], "note": "No vehicles found for that city/zip/capacity.", "city": city_for_zip or req.city.title()}
+            return {
+                "party_buses": [],
+                "limousines": [],
+                "shuttle_buses": [],
+                "note": "No vehicles found for that city/zip/capacity.",
+                "city": city_for_zip or req.city.title()
+            }
 
         df["capacity_diff"] = df["capacity"] - pax
         price_col = "prom_price_6hr" if prom else "price_4hr"
@@ -93,7 +109,9 @@ def quote(req: QuoteRequest):
             price_col = df.columns[0]  # fallback to first column if missing
         df.sort_values(by=["capacity", price_col], inplace=True)
 
-        options = []
+        party_buses = []
+        limousines = []
+        shuttle_buses = []
         for _, row in df.iterrows():
             def safe_int(val, default):
                 try:
@@ -103,10 +121,18 @@ def quote(req: QuoteRequest):
                 except Exception:
                     return default
 
+            def safe_float(val, default=0.0):
+                try:
+                    if pd.isna(val) or val == "":
+                        return default
+                    return float(val)
+                except Exception:
+                    return default
+
             if prom and not pd.isna(row.get("prom_price_6hr")):
                 min_hours = safe_int(row.get("prom_min_hours"), 6)
                 hours_billed = max(hours_requested, min_hours)
-                price = float(row["prom_price_6hr"])
+                price = safe_float(row["prom_price_6hr"])
                 total = price if hours_billed == 6 else price * (hours_billed / 6)
                 hourly_rate = total / hours_billed if hours_billed else 0.0
                 note = "Prom pricing applied (6hr min)."
@@ -115,13 +141,12 @@ def quote(req: QuoteRequest):
                 hours_billed = max(hours_requested, min_hours)
                 price_col_candidate = f"price_{hours_billed}hr"
                 if price_col_candidate in row and not pd.isna(row.get(price_col_candidate)):
-                    price = float(row.get(price_col_candidate))
+                    price = safe_float(row.get(price_col_candidate))
                 else:
-                    price = float(row.get("price_4hr", 0.0))
+                    price = safe_float(row.get("price_4hr", 0.0))
                 total = price
                 hourly_rate = total / hours_billed if hours_billed else 0.0
                 note = ""
-
 
             # Robust vehicle name selection
             vehicle_name = row.get("vehicle_title", "")
@@ -136,7 +161,7 @@ def quote(req: QuoteRequest):
             if not vehicle_name or str(vehicle_name).strip() == "":
                 vehicle_name = "Unknown"
 
-            options.append({
+            vehicle = {
                 "name": vehicle_name,
                 "capacity": int(row.get("capacity", 0)),
                 "hours_billed": hours_billed,
@@ -146,10 +171,26 @@ def quote(req: QuoteRequest):
                 "note": note,
                 "zip_codes": row.get("zip_codes", ""),
                 # ===ANCHOR: VEHICLE_OPTION_EXTRA===
-                # Add more fields as needed (e.g., image_url, add_ons, etc.)
-            })
+            }
 
-        return {"options": options, "note": options[0]["note"] if options else "", "city": city_for_zip or req.city.title()}
+            name_lower = vehicle_name.lower()
+            if ("party bus" in name_lower) or ("partybus" in name_lower):
+                party_buses.append(vehicle)
+            elif ("limo" in name_lower) or ("limousine" in name_lower):
+                limousines.append(vehicle)
+            elif ("shuttle" in name_lower) or ("coach" in name_lower) or ("charter" in name_lower) or ("bus" in name_lower):
+                shuttle_buses.append(vehicle)
+            else:
+                # If not matched, put in shuttle_buses as a catch-all
+                shuttle_buses.append(vehicle)
+
+        return {
+            "party_buses": party_buses,
+            "limousines": limousines,
+            "shuttle_buses": shuttle_buses,
+            "note": (party_buses + limousines + shuttle_buses)[0]["note"] if (party_buses or limousines or shuttle_buses) else "",
+            "city": city_for_zip or req.city.title()
+        }
     except Exception as e:
         return {"error": str(e)}
     except Exception as e:
