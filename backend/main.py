@@ -62,6 +62,15 @@ def quote(req: QuoteRequest):
         if req.zip:
             print(f"[DEBUG] Incoming zip: '{req.zip}' (type: {type(req.zip)})")
             df["zip_codes"] = df["zip_codes"].astype(str)
+            print(f"[DEBUG] First 5 zip_codes values:")
+            print(df["zip_codes"].head(5).to_string())
+            # Show split result for first row containing 85249
+            for idx, row in df.iterrows():
+                if "85249" in row["zip_codes"]:
+                    split_zips = [z for z in row["zip_codes"].split(",")]
+                    print(f"[DEBUG] Row {idx} zip_codes: {row['zip_codes']}")
+                    print(f"[DEBUG] Row {idx} split_zips: {split_zips}")
+                    break
             # Only match vehicles that serve the requested zip code
             zip_mask = df["zip_codes"].apply(lambda cell: any(z.strip() == str(req.zip).strip() for z in str(cell).split(",")))
             print(f"[DEBUG] Rows matching zip: {zip_mask.sum()} out of {len(df)}")
@@ -146,18 +155,26 @@ def quote(req: QuoteRequest):
     except Exception as e:
         return {"error": str(e)}
 
+import sys
 DATA_PATH = Path(__file__).parent.parent / "data" / "vehicles.csv"
+print(f"[DEBUG] DATA_PATH resolved to: {DATA_PATH}", file=sys.stdout)
 
 @lru_cache(maxsize=1)
 def load_vehicles():
-    return pd.read_csv(
-        DATA_PATH,
-        sep="\t",
-        engine="python",
-        dtype=str,
-        on_bad_lines="warn",
-        keep_default_na=False
-    )
+    try:
+        df = pd.read_csv(
+            DATA_PATH,
+            sep="\t",
+            engine="python",
+            dtype=str,
+            on_bad_lines="warn",
+            keep_default_na=False
+        )
+        print(f"[DEBUG] Loaded vehicles.csv: {df.shape[0]} rows, {df.shape[1]} cols", file=sys.stdout)
+        return df
+    except Exception as e:
+        print(f"[ERROR] Failed to load vehicles.csv: {e}", file=sys.stdout)
+        raise
 
 
 # Health check endpoint

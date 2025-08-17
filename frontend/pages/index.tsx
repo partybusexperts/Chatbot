@@ -27,10 +27,12 @@ export default function Home() {
   const [err, setErr] = useState<string | null>(null);
   const [splitCount, setSplitCount] = useState<number | "">("");
 
-  const API = "http://localhost:8000/quote";
+  // Use relative API path for production compatibility
+  const API = "/api/quote";
 
   // Track pivot capacity for true larger/smaller paging
   const [page, setPage] = useState(0);
+
 
   async function fetchQuote(resetPage = false) {
     setLoading(true);
@@ -67,11 +69,6 @@ export default function Home() {
     }
   }
 
-  // Always reset page to 0 when options change (new search/filter)
-  useEffect(() => {
-    setPage(0);
-  }, [options.length]);
-
   function perPerson(total: number) {
     const p = (splitCount === "" ? Number(passengers) : Number(splitCount)) || 0;
     return p > 0 && total !== undefined && total !== null ? `$${(total / p).toFixed(2)}/person` : "";
@@ -82,12 +79,17 @@ export default function Home() {
       `Quote — ${city} · ${passengers} ppl · ${hours}h${eventDate ? " · " + eventDate : ""}`,
       `${o.name} (${o.capacity} pax)`,
       `${o.prom_applied ? "Prom pricing" : "Standard pricing"}`,
-  `Hourly $${o.hourly_rate !== undefined && o.hourly_rate !== null ? o.hourly_rate.toFixed(2) : "?"} · Billed ${o.hours_billed}h`,
-  `Total $${o.total_all_in !== undefined && o.total_all_in !== null ? o.total_all_in.toFixed(2) : "?"}${perPerson(o.total_all_in) ? " · " + perPerson(o.total_all_in) : ""}`,
+      `Hourly $${o.hourly_rate !== undefined && o.hourly_rate !== null ? o.hourly_rate.toFixed(2) : "?"} · Billed ${o.hours_billed}h`,
+      `Total $${o.total_all_in !== undefined && o.total_all_in !== null ? o.total_all_in.toFixed(2) : "?"}${perPerson(o.total_all_in) ? " · " + perPerson(o.total_all_in) : ""}`,
     ].join("\n");
     navigator.clipboard.writeText(lines);
     alert("Quote copied to clipboard.");
   }
+
+  // Always reset page to 0 when options change (new search/filter)
+  useEffect(() => {
+    setPage(0);
+  }, [options.length]);
 
   return (
     <main className="min-h-screen bg-gray-50">
@@ -168,8 +170,18 @@ export default function Home() {
               </label>
             </div>
           </div>
-
-
+          <div className="mb-3">
+            <label className="block text-sm">Split cost by # people (optional)</label>
+            <input
+              className="w-40 border p-2 rounded"
+              type="number"
+              placeholder={`${passengers}`}
+              value={splitCount as number | ""}
+              onChange={(e) =>
+                setSplitCount(e.target.value === "" ? "" : Number(e.target.value))
+              }
+            />
+          </div>
           {/* Always-visible button group */}
           <div className="flex flex-wrap gap-2 pt-1 mb-4">
             <button
@@ -198,20 +210,6 @@ export default function Home() {
           </div>
         </form>
 
-
-          <div className="mb-3">
-            <label className="block text-sm">Split cost by # people (optional)</label>
-            <input
-              className="w-40 border p-2 rounded"
-              type="number"
-              placeholder={`${passengers}`}
-              value={splitCount as number | ""}
-              onChange={(e) =>
-                setSplitCount(e.target.value === "" ? "" : Number(e.target.value))
-              }
-            />
-          </div>
-        {/* Results and messages */}
         {err && <p className="text-sm text-red-600 mb-2">{err}</p>}
         {/* Show largest/smallest message in red above results, but always show vehicles */}
         {note && (note.toLowerCase().includes("largest") || note.toLowerCase().includes("smallest")) && (
